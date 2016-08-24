@@ -41,7 +41,7 @@ namespace lda {
 // We reference Griffiths and Steyvers (PNAS, 2003).
 class LDAStats {
 public:
-  LDAStats(petuum::Table<int>& summary_table, petuum::Table<int>& word_topic_table, petuum::Table<double>& llh_table);
+  LDAStats(const petuum::Table<int>& summary_table, const petuum::Table<int>& word_topic_table, const petuum::Table<double>& llh_table);
 
   // This is part of log P(z) in eq.[3].
   double ComputeOneDocLLH(LDADoc* doc);

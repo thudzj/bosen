@@ -153,14 +153,6 @@ void LDAEngine::WorkerThread(int thread_id) {
   petuum::Table<int> word_topic_table = GetTable<int>("wt");
   petuum::Table<double> llh_table = GetTable<double>("llh");
 
-  if (thread_id == 0) {
-    // LDAStats's initialization requires FLAGS_num_vocabs to be set.
-    lda_stats_.reset(new LDAStats(summary_table, word_topic_table, llh_table));
-    LOG(INFO) << "training starts";
-  }
-
-  FastDocSampler sampler(summary_table, word_topic_table);
-
   Context& context = Context::get_instance();
   int client_id = context.get_int32("client_id");
   int32_t num_work_units = context.get_int32("num_work_units");
@@ -177,12 +169,6 @@ void LDAEngine::WorkerThread(int thread_id) {
   petuum::UpdateBatch<int> summary_updates;
   std::unordered_map<int, petuum::UpdateBatch<int> > word_topic_updates;
   std::set<int32_t> local_vocabs;
-  int **wtm = new int*[54000];
-  for (int i = 0; i < 54000; i++){
-    wtm[i] = new int[100];
-    for (int j = 0; j < 100; j++)
-      wtm[i][j] = 0;
-  }
 
   int num_docs = 0;
   while (!workload_mgr.IsEndOfAnIter()) {
@@ -191,63 +177,13 @@ void LDAEngine::WorkerThread(int thread_id) {
     for (LDADoc::Iterator it(doc_ptr); !it.IsEnd(); it.Next()) {
       local_vocabs.insert(it.Word());
       word_topic_updates[it.Word()].Update(it.Topic(), 1);
-      wtm[it.Word()][it.Topic()]++;
       summary_updates.Update(it.Topic(), 1);
     }
   }
 
-  // for (int i = 0; i < 20; i++){
-  //   petuum::RowAccessor word_topic_row_acc1;
-  //         word_topic_table.Get(i, &word_topic_row_acc1);
-  //   const petuum::SortedVectorMapRow<int32_t>& word_topic_row1 =
-  //         word_topic_row_acc1.Get<petuum::SortedVectorMapRow<int32_t> >();
-  //   int summ = 0;
-  //   for (petuum::SortedVectorMapRow<int>::const_iterator wt_it =
-  //           word_topic_row1.cbegin(); !wt_it.is_end(); ++wt_it) {
-  //     //int32_t topic = wt_it->first;
-  //     int32_t count = wt_it->second;
-  //     summ += count;
-  //   }
-
-  //   LOG(INFO) << i << " ---**----- " << summ;
-  // }
-
   for (auto it = word_topic_updates.begin();
       it != word_topic_updates.end(); ++it) {
-
-    // petuum::RowAccessor word_topic_row_acc1;
-    //       word_topic_table.Get(it->first, &word_topic_row_acc1);
-    // const petuum::SortedVectorMapRow<int32_t>& word_topic_row1 =
-    //       word_topic_row_acc1.Get<petuum::SortedVectorMapRow<int32_t> >();
-    // int summ = 0;
-    // for (petuum::SortedVectorMapRow<int>::const_iterator wt_it =
-    //         word_topic_row1.cbegin(); !wt_it.is_end(); ++wt_it) {
-    //   //int32_t topic = wt_it->first;
-    //   int32_t count = wt_it->second;
-    //   summ += count;
-    // }
-
-    // if (it->first < 20)
-    //   LOG(INFO) << it->first << " ---**----- " << summ;
-
     word_topic_table.BatchInc(it->first, it->second);
-
-    // petuum::RowAccessor word_topic_row_acc;
-    //       word_topic_table.Get(it->first, &word_topic_row_acc);
-    // const petuum::SortedVectorMapRow<int32_t>& word_topic_row =
-    //       word_topic_row_acc.Get<petuum::SortedVectorMapRow<int32_t> >();
-    // summ = 0;
-    // int summ1 = 0;
-    // for (petuum::SortedVectorMapRow<int>::const_iterator wt_it =
-    //         word_topic_row.cbegin(); !wt_it.is_end(); ++wt_it) {
-    //   //int32_t topic = wt_it->first;
-    //   int32_t count = wt_it->second;
-    //   summ += count;
-    // }
-    // for (int j = 0; j < 100; j++)
-    //   summ1 += wtm[it->first][j];
-    // if (it->first < 20 && summ != summ1)
-    //   LOG(INFO) << it->first << ' ' <<  summ1 << " -----&&----- " << summ;
   }
   summary_table.BatchInc(0, summary_updates);
 
@@ -257,6 +193,13 @@ void LDAEngine::WorkerThread(int thread_id) {
     for(auto it = local_vocabs.begin(); it != local_vocabs.end(); ++it) {
       local_vocabs_.insert(*it);
     }
+  }
+
+  if (thread_id == 0) {
+    for (auto it = local_vocabs_.begin(); it != local_vocabs_.end(); ++it) {
+      word_topic_table.GetAsync(*it);
+    }
+    word_topic_table.WaitPendingAsyncGet();
   }
 
   // Sync after initialization using process_barrier_ from the parent class
@@ -273,21 +216,17 @@ void LDAEngine::WorkerThread(int thread_id) {
       && thread_id == (num_threads_ - 1))
     ? max_vocab_id + 1 : vocab_id_start + num_vocabs_per_thread;
 
+  if (thread_id == 0) {
+    // LDAStats's initialization requires FLAGS_num_vocabs to be set.
+    lda_stats_.reset(new LDAStats(summary_table, word_topic_table, llh_table));
+    LOG(INFO) << "training starts";
+  }
+
+  FastDocSampler sampler(summary_table, word_topic_table);
+
   petuum::HighResolutionTimer total_timer;  // times the computation.
+
   for (int work_unit = 1; work_unit <= num_work_units; ++work_unit) {
-
-    LOG(INFO) << work_unit;
-    petuum::RowAccessor word_topic_row_acc1;
-          word_topic_table.Get(0, &word_topic_row_acc1);
-    const petuum::SortedVectorMapRow<int32_t>& word_topic_row1 =
-          word_topic_row_acc1.Get<petuum::SortedVectorMapRow<int32_t> >();
-
-    for (petuum::SortedVectorMapRow<int>::const_iterator wt_it =
-            word_topic_row1.cbegin(); !wt_it.is_end(); ++wt_it) {
-      //int32_t topic = wt_it->first;
-      if (wt_it->second != wtm[0][wt_it->first])
-        LOG(INFO) << "------------->" << wt_it->first<< ' ' << wt_it->second << ' ' << wtm[0][wt_it->first];
-    }
 
     petuum::HighResolutionTimer work_unit_timer;
 

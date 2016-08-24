@@ -40,7 +40,7 @@
 
 namespace lda {
 
-FastDocSampler::FastDocSampler(petuum::Table<int32_t>& summary_table,petuum::Table<int32_t>& word_topic_table) {
+FastDocSampler::FastDocSampler(const petuum::Table<int32_t>& summary_table,const petuum::Table<int32_t>& word_topic_table) {
   std::random_device rd;
   rng_engine_.reset(new std::mt19937(rd()));
   // Default constructor of std::uniform_real_distribution is uniform on [0, 1]
@@ -137,8 +137,6 @@ void FastDocSampler::SampleOneDoc(LDADoc* doc) {
 
         int32_t topic = wt_it->first;
         int32_t count = wt_it->second;
-        // if (topic == old_topic && count == 0)
-        //   LOG(INFO) << topic << ' ' << count;
         nonzero_q_terms_[num_nonzero_q_terms_] = (topic == old_topic) ?
           (q_coeff_[topic] * (count - 1)) : (q_coeff_[topic] * count);
         nonzero_q_terms_topic_[num_nonzero_q_terms_] = topic;
@@ -181,6 +179,7 @@ void FastDocSampler::SampleOneDoc(LDADoc* doc) {
     // Finally, update the topic assignment z in doc, and update word-topic
     // table and summary row.
     if (old_topic != new_topic) {
+
       it.SetTopic(new_topic);
 
       petuum::UpdateBatch<int32_t> word_topic_updates(2);

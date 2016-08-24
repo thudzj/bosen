@@ -49,7 +49,7 @@ typedef double real_t;
 // FastDocSampler does not store any documents.
 class FastDocSampler {
 public:
-  FastDocSampler(petuum::Table<int32_t>& summary_table,petuum::Table<int32_t>& word_topic_table);
+  FastDocSampler(const petuum::Table<int32_t>& summary_table,const petuum::Table<int32_t>& word_topic_table);
   ~FastDocSampler();
 
   // Read off summary_table and cache it to summary_row_ to simulate thread

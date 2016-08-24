@@ -46,8 +46,8 @@ const int LDAStats::kNumLogGammaAlpha_ = 100000;
 const int LDAStats::kNumLogGammaAlphaSum_ = 10000;
 const int LDAStats::kNumLogGammaBeta_ = 1000000;
 
-LDAStats::LDAStats(petuum::Table<int>& summary_table, 
-  petuum::Table<int>& word_topic_table, petuum::Table<double>& llh_table) :
+LDAStats::LDAStats(const petuum::Table<int>& summary_table, const petuum::Table<int>& word_topic_table, 
+  const petuum::Table<double>& llh_table) :
   summary_table_(summary_table), word_topic_table_(word_topic_table), llh_table_(llh_table) {
   // Topic model parameters.
   Context& context = Context::get_instance();
@@ -135,8 +135,8 @@ void LDAStats::ComputeWordLLH(int32_t ith_llh, int word_idx_start,
           word_topic_row.cbegin(); !wt_it.is_end(); ++wt_it) {
       
         int count = wt_it->second;
-        // if (count < 0)
-        //   continue;
+        if (count < 0)
+          continue;
         CHECK_LE(0, count) << "negative count.";
         //word_llh += LogGamma(count + beta_);
         word_llh += GetLogGammaBetaOffset(count);

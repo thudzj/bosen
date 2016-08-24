@@ -10,7 +10,7 @@ alpha=0.1
 beta=0.1
 
 # Execution parameters:
-num_work_units=5
+num_work_units=50
 num_iters_per_work_unit=1
 num_clocks_per_work_unit=1
 compute_ll_interval=1
